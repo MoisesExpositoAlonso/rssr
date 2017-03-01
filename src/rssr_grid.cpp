@@ -1,5 +1,7 @@
 #include <RcppEigen.h>
+
 #include "rssvarbvsr.hpp"
+#include <vector>
 #include "kl.hpp"
 #include <cstdio>
 #include "tbb/tbb.h"
@@ -13,17 +15,21 @@ using namespace tbb;
 //' @param SiRiSr0 a length p vector specifying the initial value of SiRiSr
 //' @useDynLib rssr
 //[[Rcpp::export]]
-double rss_varbvsr_squarem_grid(const Eigen::MappedSparseMatrix<double> SiRiS,
+double rss_varbvsr_squarem_grid(const Eigen::SparseMatrix<double> &SiRiS,
                                 const double sigma_beta,
                                 const double logodds,
-                                const Eigen::Map<Eigen::ArrayXd> betahat,
-                                const Eigen::Map<Eigen::ArrayXd> se,
-                                const Eigen::Map<Eigen::ArrayXd> talpha0,
-                                const Eigen::Map<Eigen::ArrayXd> tmu0,
-                                const Eigen::Map<Eigen::ArrayXd> tSiRiSr0,
+                                const Eigen::ArrayXd &betahat,
+                                const Eigen::ArrayXd &se,
+                                const Eigen::ArrayXd &talpha0,
+                                const Eigen::ArrayXd &tmu0,
+                                const Eigen::ArrayXd &tSiRiSr0,
                                 double tolerance,
                                 int itermax,
                                 Rcpp::LogicalVector lnz_tol){
+  using  Eigen::SparseMatrix;
+  using  Eigen::ArrayXd;
+  using  Eigen::MatrixXd;
+  
   
   
   //This function implements RSS with variational bayes and the SQUAREM algorithm.
@@ -31,35 +37,36 @@ double rss_varbvsr_squarem_grid(const Eigen::MappedSparseMatrix<double> SiRiS,
   bool lnztol=lnz_tol[0];
   const size_t p = betahat.size();
   
-  Eigen::ArrayXd alpha=talpha0;
-  Eigen::ArrayXd mu=tmu0;
-  Eigen::ArrayXd SiRiSr=tSiRiSr0;
+  ArrayXd alpha=talpha0;
+  ArrayXd mu=tmu0;
+  ArrayXd SiRiSr=tSiRiSr0;
   double lnZ=log(0);
-  Eigen::MatrixXd params0(p,2);
-  Eigen::MatrixXd params(p,2);
+  MatrixXd params0(p,2);
+  MatrixXd params(p,2);
   
-  Eigen::ArrayXd alpha0=alpha;
-  Eigen::ArrayXd mu0=mu;
-  Eigen::ArrayXd SiRiSr0=SiRiSr;
+  ArrayXd alpha0=alpha;
+  ArrayXd mu0=mu;
+  ArrayXd SiRiSr0=SiRiSr;
   
-  Eigen::ArrayXd alpha1=alpha;
-  Eigen::ArrayXd mu1=mu;
-  Eigen::ArrayXd SiRiSr1=SiRiSr;
+  ArrayXd alpha1=alpha;
+  ArrayXd mu1=mu;
+  ArrayXd SiRiSr1=SiRiSr;
   
-  Eigen::ArrayXd alpha3=alpha;
-  Eigen::ArrayXd mu3=mu;
-  Eigen::ArrayXd SiRiSr3=SiRiSr;
+  ArrayXd alpha3=alpha;
+  ArrayXd mu3=mu;
+  ArrayXd SiRiSr3=SiRiSr;
   
-  Eigen::ArrayXd alpha_r(p);
-  Eigen::ArrayXd alpha_v(p);
+  ArrayXd alpha_r(p);
+  ArrayXd alpha_v(p);
   
-  Eigen::ArrayXd mu_v(p);
-  Eigen::ArrayXd mu_r(p);
+  ArrayXd mu_v(p);
+  ArrayXd mu_r(p);
   
-  Eigen::ArrayXd sesquare =se*se;
-  Eigen::ArrayXd  q= betahat/sesquare;
-  Eigen::ArrayXd  s= (sesquare*(sigma_beta*sigma_beta))/(sesquare+(sigma_beta*sigma_beta));
-  
+  double sigma_beta_square=sigma_beta*sigma_beta;
+  ArrayXd sesquare =se*se;
+  ArrayXd  q= betahat/sesquare;
+  ArrayXd  s= (sesquare*(sigma_beta*sigma_beta))/(sesquare+(sigma_beta*sigma_beta));
+  Eigen::ArrayXd sigma_square = (sesquare * sigma_beta_square) / (sesquare + sigma_beta_square);
   
   lnZ=calculate_lnZ(q,alpha*mu,SiRiSr,logodds,sesquare,alpha,mu,s,sigma_beta);
   double mtp;  
@@ -74,12 +81,30 @@ double rss_varbvsr_squarem_grid(const Eigen::MappedSparseMatrix<double> SiRiS,
     alpha0=alpha;
     mu0=mu; 
     bool reverse = iter%2!=0;
-    rss_varbvsr_iter(SiRiS,sigma_beta,logodds,betahat,se,alpha,mu,SiRiSr,reverse);
-    alpha1=alpha;
+    rss_varbvsr_iter(SiRiS,
+                     sigma_beta,
+                     logodds,
+                     betahat,
+                     sesquare,
+                     sigma_square,
+                     alpha,
+                     mu,
+                     SiRiSr,
+                     reverse);  
+      alpha1=alpha;
     mu1=mu;
     SiRiSr1=SiRiSr;
     
-    rss_varbvsr_iter(SiRiS,sigma_beta,logodds,betahat,se,alpha,mu,SiRiSr,reverse);
+    rss_varbvsr_iter(SiRiS,
+                     sigma_beta,
+                     logodds,
+                     betahat,
+                     sesquare,
+                     sigma_square,
+                     alpha,
+                     mu,
+                     SiRiSr,
+                     reverse);
     
     alpha_r=alpha1-alpha0;
     alpha_v=(alpha-alpha1)-alpha_r;
@@ -97,7 +122,16 @@ double rss_varbvsr_squarem_grid(const Eigen::MappedSparseMatrix<double> SiRiS,
       SiRiSr=SiRiS*(alpha*mu).matrix();
     }
     
-    rss_varbvsr_iter(SiRiS,sigma_beta,logodds,betahat,se,alpha,mu,SiRiSr,reverse);
+    rss_varbvsr_iter(SiRiS,
+                     sigma_beta,
+                     logodds,
+                     betahat,
+                     sesquare,
+                     sigma_square,
+                     alpha,
+                     mu,
+                     SiRiSr,
+                     reverse);
     lnZ=  calculate_lnZ(q,alpha*mu,SiRiSr,logodds,sesquare,alpha,mu,s,sigma_beta);
     if((mtp<(-1)) && (lnZ < lnZ0)){
       size_t num_bt=0;
@@ -106,7 +140,16 @@ double rss_varbvsr_squarem_grid(const Eigen::MappedSparseMatrix<double> SiRiS,
         alpha = alpha0-2*mtp*alpha_r+(mtp*mtp)*alpha_v;
         mu = mu0-2*mtp*mu_r+(mtp*mtp)*mu_v;
         SiRiSr = SiRiS*(alpha*mu).matrix();
-        rss_varbvsr_iter(SiRiS,sigma_beta,logodds,betahat,se,alpha,mu,SiRiSr,reverse);
+        rss_varbvsr_iter(SiRiS,
+                         sigma_beta,
+                         logodds,
+                         betahat,
+                         sesquare,
+                         sigma_square,
+                         alpha,
+                         mu,
+                         SiRiSr,
+                         reverse);
         lnZ=calculate_lnZ(q,alpha*mu,SiRiSr,logodds,sesquare,alpha,mu,s,sigma_beta);          
         num_bt=num_bt+1;
       }
@@ -129,27 +172,33 @@ double rss_varbvsr_squarem_grid(const Eigen::MappedSparseMatrix<double> SiRiS,
   return lnZ;
 }
 
+
+
+
 //[[Rcpp::export]]
-Rcpp::NumericMatrix grid_search_rss_varbvsr(
+Eigen::MatrixXd grid_search_rss_varbvsr(
     const Eigen::MappedSparseMatrix<double> SiRiS,
-    const Eigen::Map<Eigen::ArrayXd> sigma_beta,
-    const Eigen::Map<Eigen::ArrayXd> logodds,
-    const Eigen::Map<Eigen::ArrayXd> betahat,
-    const Eigen::Map<Eigen::ArrayXd> se,
-    const Eigen::Map<Eigen::ArrayXd> talpha0,
-    const Eigen::Map<Eigen::ArrayXd> tmu0,
-    const Eigen::Map<Eigen::ArrayXd> tSiRiSr0,
+    const Eigen::ArrayXd sigma_beta,
+    const Eigen::ArrayXd logodds,
+    const Eigen::ArrayXd betahat,
+    const Eigen::ArrayXd se,
+    const Eigen::ArrayXd talpha0,
+    const Eigen::ArrayXd tmu0,
+    const Eigen::ArrayXd tSiRiSr0,
     double tolerance,
     int itermax,
     Rcpp::LogicalVector verbose,
     Rcpp::LogicalVector lnz_tol){
   
+  using Eigen::SparseMatrix;
+  using Eigen::ArrayXd;
+  using  Eigen::MatrixXd;
   
   size_t sigb_size= sigma_beta.size();
   size_t logodds_size=logodds.size();
   size_t tot_size=sigb_size*logodds_size;
 
-  Rcpp::NumericMatrix nlzmat(logodds_size,sigb_size);
+  Eigen::MatrixXd nlzmat(logodds_size,sigb_size);
   parallel_for(blocked_range<size_t>(0,tot_size),
                [&](const blocked_range<size_t>& r){
                  for(size_t t=r.begin(); t!=r.end(); t++){
@@ -169,5 +218,39 @@ Rcpp::NumericMatrix grid_search_rss_varbvsr(
   return(nlzmat);
 }
 
+// 
+// 
+// Eigen::MatrixXd grid_search_rss_varbvsr_chunks(
+//     std::vector<Eigen::MappedSparseMatrix<double>> SiRiS,
+//     const Eigen::Map<Eigen::ArrayXd> sigma_beta,
+//     const Eigen::Map<Eigen::ArrayXd> logodds,
+//     std::vector<Eigen::Map<Eigen::ArrayXd>> betahat,
+//     std::vector<Eigen::Map<Eigen::ArrayXd>> se,
+//     std::vector<Eigen::Map<Eigen::ArrayXd>> talpha0,
+//     std::vector<Eigen::Map<Eigen::ArrayXd>> tmu0,
+//     std::vector<Eigen::Map<Eigen::ArrayXd>> tSiRiSr0,
+//     double tolerance,
+//     int itermax,
+//     Rcpp::LogicalVector verbose,
+//     Rcpp::LogicalVector lnz_tol){
+//   
+//   size_t sigb_size= sigma_beta.size();
+//   size_t logodds_size=logodds.size();
+//   size_t tot_size=sigb_size*logodds_size;
+//   
+//   Eigen::MatrixXd nlzmat(logodds_size,sigb_size);
+//   std::vector<Eigen::MatrixXd> chunk_lnz(betahat.size());
+//   for(size_t i=0; i<betahat.size(); i++){
+//     chunk_lnz[i]=grid_search_rss_varbvsr(SiRiS[i],
+//                                          sigma_beta,
+//                                          logodds,
+//                                          betahat[i],se[i],talpha0[i],tmu0[i],tSiRiSr0[i]);
+//   }
+//   for(size_t i=0; i<betahat.size(); i++){
+//     nlzmat= nlzmat+chunk_lnz[i];
+//   }
+//   return(nlzmat);
+// }
+// 
 
 

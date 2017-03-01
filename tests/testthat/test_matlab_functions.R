@@ -125,6 +125,26 @@ test_that("2d grid optimization gives more or less correct values",{
   expect_equal(10/982,c(pi_mean_grid),tolerance=0.1)})
 
 
+# update_alpha_mu <- function(alpha0,mu0,se,sigb,logodds,betahat,SiRiS){
+#   sigma_beta_square <- sigb[1]*sigb[1]
+#   se_square <- se*se
+#   sigma_square <- (se_square * sigma_beta_square) / (se_square + sigma_beta_square)
+#   sigmoid <- function(x) {
+#     return(1/(1 + exp(-x)))
+#   }
+#   alpha = sigmoid(logodds[1] + 0.5 * (log(sigma_square/(sigma_beta_square)) +  mu0 * mu0 / sigma_square))
+# 
+# 
+#   for(i in 1:length(mu0)){
+#     mu[i] = sigma_square[i] * (betahat[i] / se_square[i] -sum((SiRiS[,i]*alpha0*mu0)[-i]))
+#   }
+#   return(cbind(alpha,mu))
+# }
+# 
+# fam <- update_alpha_mu(alpha_test,mu_test,se,sigb,logodds,betahat,SiRiS)
+# 
+
+
 
 
 
